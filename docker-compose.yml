@@ -11,7 +11,7 @@ services:
   client:
     # Here 'client/ corresponds to the path to the client folder
     # that contains the Dockerfile to use.
-    build: client/
+    build: usr/src/client/
 
     # The command to execute once the image is created.
     # The following command will execute "python ./client.py".

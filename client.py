@@ -27,17 +27,43 @@ def load_file(filenames):
 
 
 def top_n(val):
-    response = requests.get(
-        'https://[YOUR_PROJECT_ID].appspot.com/_ah/api/topn', params={'val': val})
-    # Retrieves the top-n results from gcp server application and formats it to table form
-    return None
+    # get the top n terms from GCP using GET request
+    try:
+        response = requests.get(
+            'https://[YOUR_PROJECT_ID].appspot.com/_ah/api/topn', params={'val': val})
+        # Retrieves the top-n results from gcp server application and formats it to table form
+        dicts = response.json()
+    except Exception:
+        # filler data while API does not work
+        dicts = {"King": 5000, "Henry": 4500, "the": 4000,
+                 "fourth": 3500, "sir": 3000, "walter": 2500}
+    finally:
+        row_format = "{:>6}{:>15}\n"
+        table = row_format.format("Word", "Frequency")
+        for word, frequency in dicts.items():
+            table += row_format.format(word, frequency)
+        return table, len(dicts)
 
 
 def search_for_term(word):
-    response = requests.get(
-        'https://[YOUR_PROJECT_ID].appspot.com/_ah/api/search', params={'word': word})
-    # Retrieves the search-from-term results from gcp server application and formats it to table form
-    return None
+    # search the terms from files by using GET request to GCP server application
+    try:
+        response = requests.get(
+            'https://[YOUR_PROJECT_ID].appspot.com/_ah/api/search', params={'word': word})
+        # Retrieves the top-n results from gcp server application and formats it to table form
+        dicts = response.json()
+    except Exception:
+        # filler data while API does not work
+        dicts = {"1": ["histories", "1kinghenryiv", "169"], "2": [
+            "histories", "1kinghenryiv", "160"], "3": ["histories", "2kinghenryiv", "179"]}
+    finally:
+        row_format = "{:>6}{:>15}{:>15}{:>15}\n"
+        table = row_format.format(
+            "Doc ID", "Doc Folder", "Doc Name", "Frequencies")
+        for word, item in dicts.items():
+            folder, name, frequency = item
+            table += row_format.format(word, folder, name, frequency)
+        return table
 
 
 if __name__ == "__main__":
@@ -50,8 +76,8 @@ if __name__ == "__main__":
         files.append(val)
         exit_loop = False
         while(True):
-            cont = input("Would you like to select another file? [y/N]: ")
-            cont = cont.strip().lower()
+            cont = input(
+                "Would you like to select another file? [y/N]: ").strip().lower()
             if cont == "y" or cont == "yes":
                 break
             elif cont == "n" or cont == "no":
@@ -69,13 +95,12 @@ if __name__ == "__main__":
     print("Engine was loaded!")
     print("=========================\n")
     while(True):
-        print("\nYou can now either 'Search for Term' or view 'Top-N' terms")
+        print("You can now either 'Search for Term' or view 'Top-N' terms")
         print("To exit the program, type 'e' or 'exit'")
-        val = input("Please select action...[S/TN]: ")
+        val = input("Please select action...[s/tn/e]: ")
         val = val.strip().lower()
         if val == 's' or val == "search" or val == "search for term":
-            val = input("Enter Your Search Term: ")
-            val = val.strip()
+            val = input("Enter Your Search Term: ").strip()
             start_time = time.time()
             table = search_for_term(val)
             print("\nYou searched for the term: {}".format(val))
@@ -83,15 +108,14 @@ if __name__ == "__main__":
             print("Your search was executed in {} seconds".format(timeElapsed))
             print(table)
         elif val == 't' or val == "tn" or val == "topn" or val == "top-n":
-            val = input("Enter Your N Value (must be an integer): ")
-            val = val.strip()
+            val = input("Enter Your N Value (must be an int): ").strip()
             while not val.isnumeric():
                 print(
                     "Error: The value you just entered was not an integer. Please try again")
-                val = input("\nEnter Your N Value (must be an integer): ")
-                val = val.strip()
-            print("Top-{} Frequent Term(s)".format(val))
-            table = top_n(val)
+                val = input(
+                    "\nEnter Your N Value (must be an int): ").strip()
+            table, tableLen = top_n(val)
+            print("Top-{} Frequent Term(s)".format(min(int(val), tableLen)))
             print(table)
         elif val == 'e' or val == 'exit':
             print("\n=========================")
