@@ -264,7 +264,7 @@ if __name__ == "__main__":
             print(table)
         elif val == 't' or val == "tn" or val == "topn" or val == "top-n":
             val = input("Enter Your N Value (must be an int): ").strip()
-            while not val.isnumeric() and int(val) > 0:
+            while not val.isnumeric() or int(val) <= 0:
                 print(
                     "Error: The value you just entered was not an integer. Please try again")
                 val = input(
