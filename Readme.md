@@ -7,3 +7,6 @@ My server files are located in the `server` directory and is uploaded to GCP. Al
 
 ### Walkthrough Video
 https://drive.google.com/drive/folders/1Ep1NvMj1gtI8xIRWItyct27PSXjONBQn?usp=sharing
+
+### Assumptions
+I assumed that we were going to ignore punctuation so all periods, question marks, commas, quotation marks, etc are ignored. Therefore, words like piano? and food. are just considered to be equal to piano and food respectively. I also ignored capatilization so FoOd is equal to food.
