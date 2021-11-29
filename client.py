@@ -1,6 +1,7 @@
 import tarfile
 import os
 import time
+import operator
 from google.cloud import dataproc_v1 as dataproc
 from google.cloud import storage
 
@@ -177,10 +178,13 @@ def top_n(val):
         preprocess()
         response = submit_top_job(val).decode("utf-8")
         response = response.split("\n")
-        dicts = {}
-        for i in range(min(len(response), int(val))):
+        temp = {}
+        for i in range(len(response)):
             res = response[i].split("\t")
-            dicts[res[0]] = res[1]
+            if len(res) >= 2:
+                temp[res[0]] = int(res[1])
+        dicts = dict(
+            sorted(temp.items(), key=operator.itemgetter(1), reverse=True))
     except Exception as e:
         print("{}\n".format(e))
         # filler data while API does not work
@@ -189,8 +193,12 @@ def top_n(val):
     finally:
         row_format = "{:>6}{:>15}\n"
         table = row_format.format("Word", "Frequency")
+        count = 0
         for word, frequency in dicts.items():
+            if count >= int(val):
+                break
             table += row_format.format(word, frequency)
+            count += 1
         return table, len(dicts)
 
 
