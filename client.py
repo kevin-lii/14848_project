@@ -1,15 +1,15 @@
 import tarfile
 import os
 import time
-import re
 from google.cloud import dataproc_v1 as dataproc
 from google.cloud import storage
 
 
 def preprocess():
     try:
+        file = os.path.abspath('service_account.json')
         job_client = dataproc.JobControllerClient.from_service_account_json(
-            'service_account.json', client_options={
+            file, client_options={
                 "api_endpoint": "us-central1-dataproc.googleapis.com:443"})
         job = {
             "placement": {"cluster_name": "project-14848"},
@@ -17,19 +17,26 @@ def preprocess():
                 "query_file_uri": "gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/process.sh",
             },
         }
-        job_client.submit_job_as_operation(
+        job_response = job_client.submit_job(
             request={"project_id": "kevinlii148484",
-                     "region": "us-central1", "job": job}
-        )
+                     "region": "us-central1", "job": job})
+        while (not job_response.done):
+            job_response = job_client.get_job(
+                request={"project_id": "kevinlii148484",
+                         "region": "us-central1", "job_id": job_response.job_uuid})
+        job_client.delete_job(
+            request={"project_id": "kevinlii148484",
+                     "region": "us-central1", "job_id": job_response.job_uuid})
     except Exception as e:
         print("{}\n".format(e))
     return None
 
 
-def postprocess(matches):
+def postprocess():
     try:
+        file = os.path.abspath('service_account.json')
         job_client = dataproc.JobControllerClient.from_service_account_json(
-            'service_account.json', client_options={
+            file, client_options={
                 "api_endpoint": "us-central1-dataproc.googleapis.com:443"})
         job = {
             "placement": {"cluster_name": "project-14848"},
@@ -37,16 +44,20 @@ def postprocess(matches):
                 "query_file_uri": "gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/postprocess.sh",
             },
         }
-        job_client.submit_job_as_operation(
+        job_response = job_client.submit_job(
             request={"project_id": "kevinlii148484",
-                     "region": "us-central1", "job": job}
-        )
-        client = storage.Client.from_service_account_json(
-            'service_account.json')
-
-        bucket = client.get_bucket(matches.group(1))
-        output = bucket.blob(
-            f"{matches.group(2)}.000000000").download_as_string()
+                     "region": "us-central1", "job": job})
+        while (not job_response.done):
+            job_response = job_client.get_job(
+                request={"project_id": "kevinlii148484",
+                         "region": "us-central1", "job_id": job_response.job_uuid})
+        job_client.delete_job(
+            request={"project_id": "kevinlii148484",
+                     "region": "us-central1", "job_id": job_response.job_uuid})
+        client = storage.Client.from_service_account_json(file)
+        bucket = client.bucket(
+            "dataproc-staging-us-central1-615783235778-n1pp6rvq")
+        output = bucket.blob("resultFile").download_as_string()
         return output
     except Exception as e:
         print("{}\n".format(e))
@@ -54,23 +65,25 @@ def postprocess(matches):
 
 def submit_term_job(word):
     # Create the job client.
-    WORDCOUNT_JAR = ('file:///usr/lib/hadoop/hadoop-streaming.jar')
+    JAR = ('file:///usr/lib/hadoop/hadoop-streaming.jar')
+    file = os.path.abspath('service_account.json')
     job_client = dataproc.JobControllerClient.from_service_account_json(
-        'service_account.json', client_options={
+        file, client_options={
             "api_endpoint": "us-central1-dataproc.googleapis.com:443"})
     job = {
         "placement": {"cluster_name": "project-14848"},
         "hadoop_job": {
-            "main_jar_file_uris": WORDCOUNT_JAR,
+            "jar_file_uris": [JAR],
+            "main_class": "org.apache.hadoop.streaming.HadoopStreaming",
             "args": [
                 "-files",
                 "gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/server/term_mapper.py,gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/server/term_reducer.py",
-                "-mapper"
-                "'python term_mapper.py'",
-                "-reducer"
-                "'python term_reducer.py {}'".format(word),
+                "-mapper",
+                "python term_mapper.py",
+                "-reducer",
+                "python term_reducer.py {}".format(word),
                 "-combiner",
-                "'python term_reducer.py {}".format(word),
+                "python term_reducer.py {}".format(word),
                 "-input",
                 "/project/*",
                 "-output",
@@ -80,34 +93,33 @@ def submit_term_job(word):
     }
     operation = job_client.submit_job_as_operation(
         request={"project_id": "kevinlii148484",
-                 "region": "us-central1", "job": job}
-    )
-    response = operation.result()
-    matches = re.match("gs://(.*?)/(.*)", response.driver_output_resource_uri)
-    output = postprocess(matches)
-    print(f"Job finished successfully: {output}")
+                 "region": "us-central1", "job": job})
+    operation.result()
+    output = postprocess()
     return output
 
 
 def submit_top_job(n):
-    WORDCOUNT_JAR = ('file:///usr/lib/hadoop/hadoop-streaming.jar')
+    JAR = ('file:///usr/lib/hadoop/hadoop-streaming.jar')
+    file = os.path.abspath('service_account.json')
     job_client = dataproc.JobControllerClient.from_service_account_json(
-        'service_account.json', client_options={
+        file, client_options={
             "api_endpoint": "us-central1-dataproc.googleapis.com:443"})
     # hadoop jar /usr/lib/hadoop/hadoop-streaming.jar -file term_mapper.py -mapper 'python term_mapper.py' -file term_reducer.py -reducer 'python term_reducer.py king' -combiner 'python term_reducer.py king' -input /project/* -output /OutputFolder
     job = {
         "placement": {"cluster_name": "project-14848"},
         "hadoop_job": {
-            "main_jar_file_uris": WORDCOUNT_JAR,
+            "jar_file_uris": [JAR],
+            "main_class": "org.apache.hadoop.streaming.HadoopStreaming",
             "args": [
                 "-files",
                 "gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/server/top_mapper.py,gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/server/top_reducer.py",
-                "-mapper"
-                "'python top_mapper.py'",
-                "-reducer"
-                "'python top_reducer.py {}'".format(n),
+                "-mapper",
+                "python top_mapper.py",
+                "-reducer",
+                "python top_reducer.py {}".format(n),
                 "-combiner",
-                "'python top_reducer.py {}".format(n),
+                "python top_reducer.py {}".format(n),
                 "-input",
                 "/project/*",
                 "-output",
@@ -117,22 +129,29 @@ def submit_top_job(n):
     }
     operation = job_client.submit_job_as_operation(
         request={"project_id": "kevinlii148484",
-                 "region": "us-central1", "job": job}
-    )
-    response = operation.result()
-    matches = re.match("gs://(.*?)/(.*)", response.driver_output_resource_uri)
-    output = postprocess(matches)
-    print(f"Job finished successfully: {output}")
+                 "region": "us-central1", "job": job})
+    operation.result()
+    output = postprocess()
     return output
 
 
 def load_file(filenames):
     # Sends the file contents to the gcp server application
+    f = os.path.abspath('service_account.json')
+    storage_client = storage.Client.from_service_account_json(f)
+    bucket = storage_client.bucket(
+        "dataproc-staging-us-central1-615783235778-n1pp6rvq")
+    try:
+        blobs = bucket.list_blobs(prefix='project')
+        for blob in blobs:
+            blob.delete()
+    except Exception as e:
+        deleted = None
     for filename in filenames:
         file = os.path.abspath(filename)
         file_details = filename.split(".")
         try:
-            tar = tarfile.open(file, "r:gz")
+            tar = tarfile.open(filename, "r:gz")
             if (tar == None):
                 raise FileNotFoundError(
                     "Aborting: No files selected. Please select a valid file.")
@@ -144,23 +163,24 @@ def load_file(filenames):
             f = open(file_details[0], "w")
             f.write(content)
             f.close()
-            storage_client = storage.Client.from_service_account_json(
-                'service_account.json')
-            bucket = storage_client.bucket(
-                "dataproc-staging-us-central1-615783235778-n1pp6rvq")
             blob = bucket.blob("project/{}".format(file_details[0]))
             blob.upload_from_filename(file_details[0])
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             print("Aborting: File '{}' not found. Make sure that you are choosing a valid file.".format(
                 filename))
+            print(e)
             exit(1)
 
 
 def top_n(val):
-    # get the top n terms from GCP using GET request
     try:
         preprocess()
-        dicts = submit_top_job(val)
+        response = submit_top_job(val).decode("utf-8")
+        response = response.split("\n")
+        dicts = {}
+        for i in range(min(len(response), int(val))):
+            res = response[i].split("\t")
+            dicts[res[0]] = res[1]
     except Exception as e:
         print("{}\n".format(e))
         # filler data while API does not work
@@ -174,23 +194,30 @@ def top_n(val):
         return table, len(dicts)
 
 
-def search_for_term(word):
-    # search the terms from files by using GET request to GCP server application
+def search_for_term(word, files):
     try:
         preprocess()
-        dicts = submit_term_job(word)
+        response = submit_term_job(word).decode("utf-8")
+        dicts = []
+        res = response.split("\t")
+        if response != None and len(res) >= 2:
+            dicts.append(res[1])
+        else:
+            dicts.append(0)
     except Exception as e:
         print("{}\n".format(e))
         # filler data while API does not work
-        dicts = {"1": ["histories", "1kinghenryiv", "169"], "2": [
-            "histories", "1kinghenryiv", "160"], "3": ["histories", "2kinghenryiv", "179"]}
+        dicts = ["500"]
     finally:
-        row_format = "{:>6}{:>15}\n"
+        row_format = "{:>3}{:>50}\n"
         table = row_format.format(
-            "Doc Name", "Frequencies")
-        for word, item in dicts.items():
-            folder, name, frequency = item
-            table += row_format.format(name, frequency)
+            "Documents", "Frequency")
+        title = ""
+        for file in files:
+            res = file.split(".")
+            title += (res[0] + " ")
+        for frequency in dicts:
+            table += row_format.format(title, frequency)
         return table
 
 
@@ -230,14 +257,14 @@ if __name__ == "__main__":
         if val == 's' or val == "search" or val == "search for term":
             val = input("Enter Your Search Term: ").strip()
             start_time = time.time()
-            table = search_for_term(val)
+            table = search_for_term(val, files)
             print("\nYou searched for the term: {}".format(val))
             timeElapsed = time.time() - start_time
-            print("Your search was executed in {} seconds".format(timeElapsed))
+            print("Your search was executed in {} seconds\n".format(timeElapsed))
             print(table)
         elif val == 't' or val == "tn" or val == "topn" or val == "top-n":
             val = input("Enter Your N Value (must be an int): ").strip()
-            while not val.isnumeric():
+            while not val.isnumeric() and int(val) > 0:
                 print(
                     "Error: The value you just entered was not an integer. Please try again")
                 val = input(
@@ -252,17 +279,3 @@ if __name__ == "__main__":
             break
         else:
             print("You entered an invalid input. Please try again\n")
-
-
-# -file
-# gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/server/term_mapper.py
-# -mapper
-# 'python term_mapper.py'
-# -file
-# gs://dataproc-staging-us-central1-615783235778-n1pp6rvq/server/term_reducer.py
-# -reducer
-# 'python term_reducer.py king'
-# -input
-# hdfs://project
-# -output
-# hdfs://OutputFolder
